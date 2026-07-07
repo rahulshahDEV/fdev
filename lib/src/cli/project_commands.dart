@@ -430,3 +430,119 @@ Future<int> _releaseNotes(List<String> args) async {
   stdout.writeln('Changelog: ${changelogFile.path}');
   return 0;
 }
+
+Future<int> _init(List<String> args) async {
+  if (args.isNotEmpty && _isHelp(args.first)) {
+    _printInitHelp();
+    return 0;
+  }
+
+  stdout.writeln('Initializing Cursor, Caveman, and Graphify...');
+
+  // 1. Install Graphify
+  stdout.writeln('\n[1/5] Installing Graphify...');
+  await _runStepOrWarning(
+    'graphify',
+    ['install', '--project', '--platform', 'cursor'],
+    installHint: 'Make sure graphify is installed (e.g., pipx install graphifyy).',
+  );
+
+  // 2. Generate project graph
+  stdout.writeln('\n[2/5] Generating project graph...');
+  await _runStepOrWarning(
+    'graphify',
+    ['.'],
+    installHint: 'Make sure graphify is installed.',
+  );
+
+  // 3. Add Caveman skill
+  stdout.writeln('\n[3/5] Adding Caveman skill...');
+  await _runStepOrWarning(
+    'npx',
+    ['skills', 'add', 'JuliusBrussee/caveman', '-a', 'cursor', '--with-init'],
+    installHint: 'Make sure npm/npx is installed.',
+  );
+
+  // 4. Update .gitignore
+  stdout.writeln('\n[4/5] Updating .gitignore...');
+  final gitignore = File('.gitignore');
+  try {
+    if (gitignore.existsSync()) {
+      final content = await gitignore.readAsString();
+      if (!content.contains('graphify-out/')) {
+        final hasNewline = content.endsWith('\n') || content.isEmpty;
+        await gitignore.writeAsString(
+          '${content}${hasNewline ? '' : '\n'}graphify-out/\n',
+        );
+        stdout.writeln('Added graphify-out/ to .gitignore');
+      } else {
+        stdout.writeln('graphify-out/ already in .gitignore');
+      }
+    } else {
+      await gitignore.writeAsString('graphify-out/\n');
+      stdout.writeln('Created .gitignore with graphify-out/');
+    }
+  } catch (e) {
+    stdout.writeln('Warning: Failed to update .gitignore: $e');
+  }
+
+  // 5. Commit changes if inside git repo
+  stdout.writeln('\n[5/5] Checking Git repository...');
+  try {
+    final isGit = await _runCaptured('git', ['rev-parse', '--is-inside-work-tree']);
+    if (isGit.exitCode == 0) {
+      stdout.writeln('Git repository detected. Adding files to staging...');
+      final rulesDir = Directory('.cursor/rules');
+      final agentsDir = Directory('.agents');
+      final gitArgs = <String>[];
+      if (rulesDir.existsSync()) {
+        gitArgs.add('.cursor/rules/');
+      }
+      if (agentsDir.existsSync()) {
+        gitArgs.add('.agents/');
+      }
+      if (gitignore.existsSync()) {
+        gitArgs.add('.gitignore');
+      }
+      if (gitArgs.isNotEmpty) {
+        final addResult = await _runStep(
+          'git',
+          ['add', ...gitArgs],
+        );
+        if (addResult == 0) {
+          stdout.writeln('Committing changes...');
+          await _runStep(
+            'git',
+            ['commit', '-m', 'Add Graphify and Caveman'],
+          );
+        } else {
+          stdout.writeln('Warning: git add failed.');
+        }
+      }
+    } else {
+      stdout.writeln('Not inside a Git repository. Skipping commit.');
+    }
+  } catch (e) {
+    stdout.writeln('Warning: Git operation skipped due to error: $e');
+  }
+
+  stdout.writeln('\nInitialization complete!');
+  return 0;
+}
+
+Future<int> _runStepOrWarning(
+  String executable,
+  List<String> arguments, {
+  required String installHint,
+}) async {
+  try {
+    final exitCode = await _runStep(executable, arguments);
+    if (exitCode != 0) {
+      stdout.writeln('Warning: `$executable ${arguments.join(' ')}` exited with code $exitCode.');
+    }
+    return exitCode;
+  } catch (e) {
+    stdout.writeln('Warning: Could not run `$executable`. $installHint');
+    return 127;
+  }
+}

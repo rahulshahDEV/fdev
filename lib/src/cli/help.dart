@@ -22,6 +22,7 @@ Commands:
   signapk                Generate android/app keystore.jks and properties.
   sha                    Show SHA1 and SHA256 for an existing Android keystore.
   swagger                Generate Dart API response models from Swagger/OpenAPI JSON.
+  init                   Initialize Cursor, Caveman, and Graphify in the project.
   upgrade                Upgrade fdev to the latest version from pub.dev.
   version                Print the current version of fdev.
 
@@ -42,6 +43,7 @@ Examples:
   fdev sha
   fdev swagger --url https://example.com/swagger.json --out lib/models/api_models.dart
   fdev swagger --file swagger.json --watch
+  fdev init
   fdev upgrade
   fdev version
 
@@ -318,5 +320,19 @@ Examples:
   fdev swagger --file swagger.json --out lib/data/models/api_models.dart
   fdev swagger --file swagger.json --watch
   fdev swagger --file swagger.json --watch --interval 1
+''');
+}
+
+void _printInitHelp() {
+  stdout.writeln(r'''
+Usage:
+  fdev init
+
+Initializes Cursor, Caveman, and Graphify in the current project:
+1. Installs Graphify for Cursor.
+2. Generates the project graph.
+3. Adds the JuliusBrussee/caveman skill for Cursor.
+4. Ignores the graphify-out/ folder in .gitignore.
+5. Commits these changes if in a Git repository.
 ''');
 }

@@ -100,6 +100,8 @@ Future<int> runFdev(List<String> args) async {
       case 'upgrade':
       case 'update':
         return await _upgrade(rest);
+      case 'init':
+        return await _init(rest);
       case 'help':
         _printHelp();
         return 0;
