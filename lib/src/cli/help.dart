@@ -312,12 +312,14 @@ Options:
   -o, --out <path>           Output Dart file. Default: lib/models/api_models.dart.
   --root <name>              Root class name when input is sample JSON. Default: ApiResponse.
   --class-prefix <prefix>    Prefix generated class names.
+  --copy-with                Generate a copyWith method for each model.
   --watch                    Watch --file and regenerate on change (requires --file).
   --interval <seconds>       Poll interval for --watch. Default: 2.
 
 Examples:
   fdev swagger --url https://example.com/swagger.json
   fdev swagger --file swagger.json --out lib/data/models/api_models.dart
+  fdev swagger --file swagger.json --copy-with
   fdev swagger --file swagger.json --watch
   fdev swagger --file swagger.json --watch --interval 1
 ''');

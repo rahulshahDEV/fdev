@@ -414,6 +414,12 @@ From a local JSON file:
 fdev swagger --file swagger.json --out lib/data/models/api_models.dart
 ```
 
+Generate a `copyWith` method for each model:
+
+```sh
+fdev swagger --file swagger.json --out lib/data/models/api_models.dart --copy-with
+```
+
 Watch a local Swagger file and regenerate on change:
 
 ```sh
