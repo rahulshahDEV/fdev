@@ -11,7 +11,7 @@ class SwaggerModelGenerator {
   SwaggerModelGenerator({
     required this.rootClassName,
     this.classPrefix = '',
-    required this.generateCopyWith,
+    this.generateCopyWith = false,
   });
 
   final String rootClassName;
@@ -435,8 +435,7 @@ class SwaggerModelGenerator {
         ..writeln('    };')
         ..writeln('  }');
 
-      /// Create copyWith method if [generateCopyWith] true,
-      /// otherwise, just append the '}' to close the class
+      // Create copyWith when requested; otherwise close the class.
       if (generateCopyWith) {
         _createCopyWithMethod(buffer, model);
       } else {
@@ -450,21 +449,31 @@ class SwaggerModelGenerator {
     return buffer.toString();
   }
 
-  _createCopyWithMethod(StringBuffer buffer, _ModelClass model) {
+  void _createCopyWithMethod(StringBuffer buffer, _ModelClass model) {
+    if (model.fields.isEmpty) {
+      // Empty named-parameter lists (`copyWith({})`) are invalid Dart.
+      buffer
+        ..writeln('  ${model.name} copyWith() => const ${model.name}();')
+        ..writeln('}')
+        ..writeln();
+      return;
+    }
+
     buffer.writeln('  ${model.name} copyWith({');
     for (final field in model.fields) {
-      buffer.writeln("    ${field.type.nullableDartType} ${field.name},");
+      buffer.writeln('    ${field.type.nullableDartType} ${field.name},');
     }
     buffer
-      ..writeln(' }) {')
-      ..writeln('   return ${model.name}(');
+      ..writeln('  }) {')
+      ..writeln('    return ${model.name}(');
     for (final field in model.fields) {
-      buffer
-          .writeln("      ${field.name}: ${field.name} ?? this.${field.name},");
+      buffer.writeln(
+        '      ${field.name}: ${field.name} ?? this.${field.name},',
+      );
     }
     buffer
-      ..writeln('   );')
-      ..writeln(' }')
+      ..writeln('    );')
+      ..writeln('  }')
       ..writeln('}')
       ..writeln();
   }

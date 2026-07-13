@@ -1,11 +1,9 @@
 # Changelog
 
 ## 0.1.5
-- Added optional `fdev swagger --copy-with` support for generated models.
-
-## 0.1.5
 
 - Added `fdev init` command to automate Cursor, Caveman, and Graphify setup.
+- Added optional `fdev swagger --copy-with` support for generated models.
 
 ## 0.1.4
 
