@@ -1,10 +1,15 @@
 import 'dart:convert';
 
 class GeneratedApiModelFile {
-  const GeneratedApiModelFile({required this.source, required this.classCount});
+  const GeneratedApiModelFile({
+    required this.source,
+    required this.classCount,
+    this.filterSummary = const [],
+  });
 
   final String source;
   final int classCount;
+  final List<String> filterSummary;
 }
 
 class SwaggerModelGenerator {
@@ -25,6 +30,9 @@ class SwaggerModelGenerator {
   GeneratedApiModelFile generate(
     String sourceText, {
     required String sourceName,
+    List<String>? paths,
+    String? method,
+    List<String>? operationIds,
   }) {
     final decoded = jsonDecode(sourceText);
     if (decoded is! Map) {
@@ -37,9 +45,29 @@ class SwaggerModelGenerator {
     _classes.clear();
     _inProgress.clear();
 
+    final hasPathFilter = paths != null && paths.isNotEmpty;
+    final hasOperationFilter = operationIds != null && operationIds.isNotEmpty;
+    final filterSummary = <String>[];
+
     if (_looksLikeOpenApi(root)) {
-      _generateFromOpenApi(root);
+      if (hasPathFilter || hasOperationFilter) {
+        filterSummary.addAll(
+          _generateFromOpenApiFiltered(
+            root,
+            paths: paths ?? const [],
+            method: method,
+            operationIds: operationIds ?? const [],
+          ),
+        );
+      } else {
+        _generateFromOpenApi(root);
+      }
     } else {
+      if (hasPathFilter || hasOperationFilter) {
+        throw const FormatException(
+          '`--path` / `--operation-id` require an OpenAPI/Swagger document.',
+        );
+      }
       _ensureClass(
         _safeClassName(rootClassName),
         root,
@@ -50,6 +78,7 @@ class SwaggerModelGenerator {
     return GeneratedApiModelFile(
       source: _renderFile(sourceName),
       classCount: _classes.length,
+      filterSummary: filterSummary,
     );
   }
 
@@ -86,6 +115,209 @@ class SwaggerModelGenerator {
         spec,
         originalName: rootClassName,
       );
+    }
+  }
+
+  /// Seeds models only from matched operations (request + responses + $refs).
+  List<String> _generateFromOpenApiFiltered(
+    Map<String, dynamic> spec, {
+    required List<String> paths,
+    required String? method,
+    required List<String> operationIds,
+  }) {
+    final normalizedPaths = {
+      for (final path in paths)
+        if (path.trim().isNotEmpty) path.trim(),
+    };
+    final normalizedOperationIds = {
+      for (final id in operationIds)
+        if (id.trim().isNotEmpty) id.trim(),
+    };
+    final normalizedMethod = method?.trim().toLowerCase();
+    if (normalizedMethod != null &&
+        normalizedMethod.isNotEmpty &&
+        !_httpMethods.contains(normalizedMethod)) {
+      throw FormatException(
+        'Unknown HTTP method `$method`. Use one of: ${_httpMethods.join(', ')}.',
+      );
+    }
+
+    final pathMap = _maybeMap(spec['paths']);
+    if (pathMap == null || pathMap.isEmpty) {
+      throw const FormatException('OpenAPI document has no paths to filter.');
+    }
+
+    final matched = <String>[];
+    for (final pathEntry in pathMap.entries) {
+      final path = pathEntry.key;
+      final operations = _maybeMap(pathEntry.value);
+      if (operations == null) {
+        continue;
+      }
+
+      for (final operationEntry in operations.entries) {
+        final httpMethod = operationEntry.key.toLowerCase();
+        if (!_httpMethods.contains(httpMethod)) {
+          continue;
+        }
+
+        final operation = _maybeMap(operationEntry.value);
+        if (operation == null) {
+          continue;
+        }
+
+        final operationId = operation['operationId'];
+        final operationIdText =
+            operationId is String ? operationId.trim() : '';
+        final matchesOperationId = operationIdText.isNotEmpty &&
+            normalizedOperationIds.contains(operationIdText);
+        final matchesPath = normalizedPaths.contains(path);
+        final matchesMethod = normalizedMethod == null ||
+            normalizedMethod.isEmpty ||
+            normalizedMethod == httpMethod;
+
+        final bool isMatch;
+        if (normalizedOperationIds.isNotEmpty && normalizedPaths.isNotEmpty) {
+          isMatch = matchesPath && matchesMethod && matchesOperationId;
+        } else if (normalizedOperationIds.isNotEmpty) {
+          isMatch = matchesOperationId && matchesMethod;
+        } else {
+          isMatch = matchesPath && matchesMethod;
+        }
+
+        if (!isMatch) {
+          continue;
+        }
+
+        matched.add('${httpMethod.toUpperCase()} $path');
+        _seedOperationSchemas(
+          operation,
+          method: httpMethod,
+          path: path,
+        );
+      }
+    }
+
+    if (matched.isEmpty) {
+      final parts = <String>[];
+      if (normalizedPaths.isNotEmpty) {
+        parts.add('path(s) ${normalizedPaths.join(', ')}');
+      }
+      if (normalizedMethod != null && normalizedMethod.isNotEmpty) {
+        parts.add('method $normalizedMethod');
+      }
+      if (normalizedOperationIds.isNotEmpty) {
+        parts.add('operationId(s) ${normalizedOperationIds.join(', ')}');
+      }
+      throw FormatException(
+        'No operations matched ${parts.join(' + ')}.',
+      );
+    }
+
+    if (_classes.isEmpty) {
+      throw FormatException(
+        'Matched ${matched.join(', ')} but found no request/response schemas to generate.',
+      );
+    }
+
+    return matched;
+  }
+
+  void _seedOperationSchemas(
+    Map<String, dynamic> operation, {
+    required String method,
+    required String path,
+  }) {
+    final operationName = _operationName(operation, method, path);
+
+    final requestSchema = _requestBodySchema(operation);
+    if (requestSchema != null) {
+      _seedSchemaRoot(
+        requestSchema,
+        preferredClassName: '$classPrefix${operationName}Request',
+        originalName: '$operationName request',
+      );
+    }
+
+    final responses = _maybeMap(operation['responses']);
+    if (responses == null) {
+      return;
+    }
+
+    for (final responseEntry in responses.entries) {
+      final schema = _responseSchema(responseEntry.value);
+      if (schema == null) {
+        continue;
+      }
+      final status = _safeClassName(responseEntry.key);
+      _seedSchemaRoot(
+        schema,
+        preferredClassName: '$classPrefix$operationName${status}Response',
+        originalName: '$operationName ${responseEntry.key}',
+      );
+    }
+  }
+
+  Map<String, dynamic>? _requestBodySchema(Map<String, dynamic> operation) {
+    final requestBody = _maybeMap(operation['requestBody']);
+    if (requestBody != null) {
+      final content = _maybeMap(requestBody['content']);
+      if (content != null) {
+        final preferred = content['application/json'] ??
+            content['application/*+json'] ??
+            content.values.cast<Object?>().firstWhere(
+                  (value) => _maybeMap(value)?['schema'] != null,
+                  orElse: () => null,
+                );
+        final schema = _maybeMap(_maybeMap(preferred)?['schema']);
+        if (schema != null) {
+          return schema;
+        }
+      }
+    }
+
+    final parameters = operation['parameters'];
+    if (parameters is! List) {
+      return null;
+    }
+    for (final parameter in parameters) {
+      final map = _maybeMap(parameter);
+      if (map == null) {
+        continue;
+      }
+      if (map['in']?.toString() != 'body') {
+        continue;
+      }
+      final schema = _maybeMap(map['schema']);
+      if (schema != null) {
+        return schema;
+      }
+    }
+    return null;
+  }
+
+  void _seedSchemaRoot(
+    Map<String, dynamic> schema, {
+    required String preferredClassName,
+    required String originalName,
+  }) {
+    final ref = schema[r'$ref'];
+    if (ref is String) {
+      // Recursively ensures the referenced model and nested $refs.
+      _describeSchema(schema, preferredClassName);
+      return;
+    }
+
+    final type = _schemaType(schema);
+    if (type == 'array') {
+      final className = _uniqueClassName(preferredClassName);
+      _ensureClass(className, schema, originalName: originalName);
+      return;
+    }
+
+    if (_isObjectLikeSchema(schema) || type == 'object') {
+      final className = _uniqueClassName(preferredClassName);
+      _ensureClass(className, schema, originalName: originalName);
     }
   }
 

@@ -423,6 +423,23 @@ Generate a `copyWith` method for each model:
 fdev swagger --file swagger.json --out lib/data/models/api_models.dart --copy-with
 ```
 
+Generate models for one endpoint only (request/response + nested `$ref`s):
+
+```sh
+fdev swagger --file swagger.json \
+  --path /users/{id} --method get \
+  --out lib/models/user_detail.dart \
+  --copy-with
+```
+
+Or by `operationId`:
+
+```sh
+fdev swagger --url https://example.com/openapi.json \
+  --operation-id getUserById \
+  --out lib/models/get_user.dart
+```
+
 Watch a local Swagger file and regenerate on change:
 
 ```sh

@@ -313,6 +313,9 @@ Options:
   -o, --out <path>           Output Dart file. Default: lib/models/api_models.dart.
   --root <name>              Root class name when input is sample JSON. Default: ApiResponse.
   --class-prefix <prefix>    Prefix generated class names.
+  --path <paths>             Only generate models for these OpenAPI paths (comma-separated).
+  --method <http>            Limit --path / --operation-id to one HTTP method (get, post, ...).
+  --operation-id <ids>       Only generate models for these operationId values (comma-separated).
   --copy-with                Generate a copyWith method for each model.
   --watch                    Watch --file and regenerate on change (requires --file).
   --interval <seconds>       Poll interval for --watch. Default: 2.
@@ -321,6 +324,8 @@ Examples:
   fdev swagger --url https://example.com/swagger.json
   fdev swagger --file swagger.json --out lib/data/models/api_models.dart
   fdev swagger --file swagger.json --copy-with
+  fdev swagger --file swagger.json --path /users/{id} --method get --copy-with
+  fdev swagger --url https://example.com/openapi.json --operation-id getUserById
   fdev swagger --file swagger.json --watch
   fdev swagger --file swagger.json --watch --interval 1
 ''');

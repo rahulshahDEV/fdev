@@ -15,6 +15,9 @@ Future<int> _swagger(List<String> args) async {
       'root',
       'class-prefix',
       'interval',
+      'path',
+      'method',
+      'operation-id',
     },
     aliases: const {'u': 'url', 'o': 'out'},
   );
@@ -33,6 +36,16 @@ Future<int> _swagger(List<String> args) async {
   return _swaggerRun(parsed);
 }
 
+List<String> _splitCsvOption(String? raw) {
+  if (raw == null || raw.trim().isEmpty) {
+    return const [];
+  }
+  return [
+    for (final part in raw.split(','))
+      if (part.trim().isNotEmpty) part.trim(),
+  ];
+}
+
 Future<int> _swaggerRun(ParsedArgs parsed) async {
   final url = parsed.option('url') ?? await _promptUrlIfNeeded(parsed);
   final inputFile = parsed.option('file');
@@ -40,6 +53,17 @@ Future<int> _swaggerRun(ParsedArgs parsed) async {
       (inputFile == null || inputFile.isEmpty)) {
     throw const CliFailure(
       'Pass `--url <swagger-json-url>` or `--file <swagger.json>`.',
+    );
+  }
+
+  final paths = _splitCsvOption(parsed.option('path'));
+  final operationIds = _splitCsvOption(parsed.option('operation-id'));
+  final method = parsed.option('method')?.trim();
+  if ((method != null && method.isNotEmpty) &&
+      paths.isEmpty &&
+      operationIds.isEmpty) {
+    throw const CliFailure(
+      '`--method` requires `--path` and/or `--operation-id`.',
     );
   }
 
@@ -58,13 +82,26 @@ Future<int> _swaggerRun(ParsedArgs parsed) async {
     classPrefix: classPrefix,
     generateCopyWith: generateCopyWith,
   );
-  final result = generator.generate(sourceText, sourceName: sourceName);
+  final result = generator.generate(
+    sourceText,
+    sourceName: sourceName,
+    paths: paths.isEmpty ? null : paths,
+    method: method == null || method.isEmpty ? null : method,
+    operationIds: operationIds.isEmpty ? null : operationIds,
+  );
 
   final outFile = File(outPath);
   await outFile.parent.create(recursive: true);
   await outFile.writeAsString(result.source);
 
-  stdout.writeln('Generated ${result.classCount} model classes in $outPath');
+  if (result.filterSummary.isEmpty) {
+    stdout.writeln('Generated ${result.classCount} model classes in $outPath');
+  } else {
+    stdout.writeln(
+      'Generated ${result.classCount} model classes for '
+      '${result.filterSummary.join(', ')} in $outPath',
+    );
+  }
   final formatCode = await _runInherited('dart', ['format', outPath]);
   if (formatCode != 0) {
     return formatCode;
