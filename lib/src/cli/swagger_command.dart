@@ -51,9 +51,12 @@ Future<int> _swaggerRun(ParsedArgs parsed) async {
       ? await File(inputFile).readAsString()
       : await _downloadText(Uri.parse(url!));
 
+  final generateCopyWith = parsed.hasFlag('copy-with');
+
   final generator = SwaggerModelGenerator(
     rootClassName: rootClass,
     classPrefix: classPrefix,
+    generateCopyWith: generateCopyWith,
   );
   final result = generator.generate(sourceText, sourceName: sourceName);
 

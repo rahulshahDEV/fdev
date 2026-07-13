@@ -8,10 +8,15 @@ class GeneratedApiModelFile {
 }
 
 class SwaggerModelGenerator {
-  SwaggerModelGenerator({required this.rootClassName, this.classPrefix = ''});
+  SwaggerModelGenerator({
+    required this.rootClassName,
+    this.classPrefix = '',
+    this.generateCopyWith = false,
+  });
 
   final String rootClassName;
   final String classPrefix;
+  final bool generateCopyWith;
 
   final Map<String, String> _schemaClassNames = {};
   final Map<String, _ModelClass> _classes = {};
@@ -428,13 +433,49 @@ class SwaggerModelGenerator {
       }
       buffer
         ..writeln('    };')
-        ..writeln('  }')
-        ..writeln('}')
-        ..writeln();
+        ..writeln('  }');
+
+      // Create copyWith when requested; otherwise close the class.
+      if (generateCopyWith) {
+        _createCopyWithMethod(buffer, model);
+      } else {
+        buffer
+          ..writeln('}')
+          ..writeln();
+      }
     }
 
     buffer.write(_helperSource);
     return buffer.toString();
+  }
+
+  void _createCopyWithMethod(StringBuffer buffer, _ModelClass model) {
+    if (model.fields.isEmpty) {
+      // Empty named-parameter lists (`copyWith({})`) are invalid Dart.
+      buffer
+        ..writeln('  ${model.name} copyWith() => const ${model.name}();')
+        ..writeln('}')
+        ..writeln();
+      return;
+    }
+
+    buffer.writeln('  ${model.name} copyWith({');
+    for (final field in model.fields) {
+      buffer.writeln('    ${field.type.nullableDartType} ${field.name},');
+    }
+    buffer
+      ..writeln('  }) {')
+      ..writeln('    return ${model.name}(');
+    for (final field in model.fields) {
+      buffer.writeln(
+        '      ${field.name}: ${field.name} ?? this.${field.name},',
+      );
+    }
+    buffer
+      ..writeln('    );')
+      ..writeln('  }')
+      ..writeln('}')
+      ..writeln();
   }
 
   Map<String, dynamic> _normalizeComposedSchema(Map<String, dynamic> schema) {
