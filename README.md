@@ -16,7 +16,9 @@
 - run the iOS pod update workflow
 - generate Android upload keystores and show SHA fingerprints
 - generate plain Dart API response models from Swagger/OpenAPI JSON
+- optional `--copy-with` on generated Swagger models
 - watch a local Swagger file and regenerate models on change
+- one-click Graphify + Caveman setup for Cursor, Claude Code, Codex, and Antigravity
 - check local Dart/Flutter setup
 
 This package is intentionally dependency-free. The generated API models also avoid external dependencies and include manual `fromJson` and `toJson` methods.
@@ -64,6 +66,7 @@ Here is the compatibility matrix for `fdev` features across operating systems:
 | **`fdev signapk`** | ✅ | ✅ | ✅ | Generate Android signing keys |
 | **`fdev sha`** | ✅ | ✅ | ✅ | Show keystore SHA fingerprints |
 | **`fdev swagger`** | ✅ | ✅ | ✅ | Swagger/OpenAPI model generator |
+| **`fdev init`** | ✅ | ✅ | ✅ | Graphify + Caveman multi-agent project setup |
 | **`fdev upgrade`** | ✅ | ✅ | ✅ | Self-upgrade CLI to the latest version |
 | **`fdev version`** | ✅ | ✅ | ✅ | Print active CLI version |
 | **`fdev pod update`** | ✅ | ❌ | ❌ | CocoaPods is macOS-only |
@@ -447,6 +450,25 @@ Generated models follow the Swagger/OpenAPI contract:
 - optional fields stay nullable because the response may omit them
 - `nullable: true`, `x-nullable: true`, `type: ["...", "null"]`, and
   `oneOf`/`anyOf` null variants are treated as nullable
+
+## Init (Graphify + Caveman)
+
+One-click project setup for Graphify and the Caveman skill across AI coding agents.
+
+Default agents: **Cursor**, **Claude Code**, **Codex**, and **Antigravity**.
+
+```sh
+fdev init
+```
+
+Install for a subset only:
+
+```sh
+fdev init --agents cursor,codex
+fdev init --agents claude-code,antigravity
+```
+
+Requires `graphify` (e.g. `pipx install graphifyy`) and `npx` on PATH. Missing tools print warnings and the rest of the setup continues.
 
 ## Updating & Upgrading
 

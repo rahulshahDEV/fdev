@@ -1,9 +1,15 @@
 # Changelog
 
+## 0.1.6
+
+- Expanded `fdev init` to Graphify + Caveman setup for Cursor, Claude Code,
+  Codex, and Antigravity (`--agents` to select a subset).
+- Added optional `fdev swagger --copy-with` support for generated models.
+- Fixed update notice so it only suggests upgrading when pub.dev is newer.
+
 ## 0.1.5
 
 - Added `fdev init` command to automate Cursor, Caveman, and Graphify setup.
-- Added optional `fdev swagger --copy-with` support for generated models.
 
 ## 0.1.4
 

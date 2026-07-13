@@ -431,21 +431,96 @@ Future<int> _releaseNotes(List<String> args) async {
   return 0;
 }
 
+/// Skills CLI agent id → Graphify `--platform` id.
+const Map<String, String> _initAgentPlatforms = {
+  'cursor': 'cursor',
+  'claude-code': 'claude',
+  'codex': 'codex',
+  'antigravity': 'antigravity',
+};
+
+const List<String> _initDefaultAgents = [
+  'cursor',
+  'claude-code',
+  'codex',
+  'antigravity',
+];
+
+List<String> _parseInitAgents(ParsedArgs parsed) {
+  final raw = parsed.option('agents');
+  if (raw == null || raw.trim().isEmpty) {
+    return List<String>.from(_initDefaultAgents);
+  }
+
+  final selected = <String>[];
+  final seen = <String>{};
+  for (final part in raw.split(',')) {
+    final name = part.trim().toLowerCase();
+    if (name.isEmpty) {
+      continue;
+    }
+    if (!_initAgentPlatforms.containsKey(name)) {
+      throw CliFailure(
+        'Unknown agent `$name`. Supported: ${_initDefaultAgents.join(', ')}.',
+      );
+    }
+    if (seen.add(name)) {
+      selected.add(name);
+    }
+  }
+
+  if (selected.isEmpty) {
+    throw const CliFailure(
+      '`--agents` must list at least one agent '
+      '(cursor, claude-code, codex, antigravity).',
+    );
+  }
+  return selected;
+}
+
+String _initAgentLabel(String agent) {
+  switch (agent) {
+    case 'claude-code':
+      return 'Claude Code';
+    case 'antigravity':
+      return 'Antigravity';
+    case 'codex':
+      return 'Codex';
+    case 'cursor':
+      return 'Cursor';
+    default:
+      return agent;
+  }
+}
+
 Future<int> _init(List<String> args) async {
   if (args.isNotEmpty && _isHelp(args.first)) {
     _printInitHelp();
     return 0;
   }
 
-  stdout.writeln('Initializing Cursor, Caveman, and Graphify...');
-
-  // 1. Install Graphify
-  stdout.writeln('\n[1/5] Installing Graphify...');
-  await _runStepOrWarning(
-    'graphify',
-    ['install', '--project', '--platform', 'cursor'],
-    installHint: 'Make sure graphify is installed (e.g., pipx install graphifyy).',
+  final parsed = ParsedArgs.parse(
+    args,
+    optionNames: const {'agents'},
+    aliases: const {},
   );
+  final agents = _parseInitAgents(parsed);
+  final labels = agents.map(_initAgentLabel).join(', ');
+
+  stdout.writeln('Initializing Graphify + Caveman for $labels...');
+
+  // 1. Install Graphify per selected platform
+  stdout.writeln('\n[1/5] Installing Graphify...');
+  for (final agent in agents) {
+    final platform = _initAgentPlatforms[agent]!;
+    stdout.writeln('  → platform: $platform');
+    await _runStepOrWarning(
+      'graphify',
+      ['install', '--project', '--platform', platform],
+      installHint:
+          'Make sure graphify is installed (e.g., pipx install graphifyy).',
+    );
+  }
 
   // 2. Generate project graph
   stdout.writeln('\n[2/5] Generating project graph...');
@@ -455,11 +530,24 @@ Future<int> _init(List<String> args) async {
     installHint: 'Make sure graphify is installed.',
   );
 
-  // 3. Add Caveman skill
+  // 3. Add Caveman skill for selected agents
   stdout.writeln('\n[3/5] Adding Caveman skill...');
+  final skillsArgs = <String>[
+    'skills',
+    'add',
+    'JuliusBrussee/caveman',
+  ];
+  for (final agent in agents) {
+    skillsArgs
+      ..add('-a')
+      ..add(agent);
+  }
+  skillsArgs
+    ..add('-y')
+    ..add('--with-init');
   await _runStepOrWarning(
     'npx',
-    ['skills', 'add', 'JuliusBrussee/caveman', '-a', 'cursor', '--with-init'],
+    skillsArgs,
     installHint: 'Make sure npm/npx is installed.',
   );
 
@@ -489,20 +577,25 @@ Future<int> _init(List<String> args) async {
   // 5. Commit changes if inside git repo
   stdout.writeln('\n[5/5] Checking Git repository...');
   try {
-    final isGit = await _runCaptured('git', ['rev-parse', '--is-inside-work-tree']);
+    final isGit =
+        await _runCaptured('git', ['rev-parse', '--is-inside-work-tree']);
     if (isGit.exitCode == 0) {
       stdout.writeln('Git repository detected. Adding files to staging...');
-      final rulesDir = Directory('.cursor/rules');
-      final agentsDir = Directory('.agents');
       final gitArgs = <String>[];
-      if (rulesDir.existsSync()) {
-        gitArgs.add('.cursor/rules/');
-      }
-      if (agentsDir.existsSync()) {
-        gitArgs.add('.agents/');
-      }
-      if (gitignore.existsSync()) {
-        gitArgs.add('.gitignore');
+      for (final path in const [
+        '.cursor/',
+        '.claude/',
+        '.codex/',
+        '.agents/',
+        'AGENTS.md',
+        'CLAUDE.md',
+        'skills-lock.json',
+        '.gitignore',
+      ]) {
+        final entity = path.endsWith('/') ? Directory(path) : File(path);
+        if (entity.existsSync()) {
+          gitArgs.add(path);
+        }
       }
       if (gitArgs.isNotEmpty) {
         final addResult = await _runStep(
@@ -513,7 +606,7 @@ Future<int> _init(List<String> args) async {
           stdout.writeln('Committing changes...');
           await _runStep(
             'git',
-            ['commit', '-m', 'Add Graphify and Caveman'],
+            ['commit', '-m', 'Add Graphify and Caveman for $labels'],
           );
         } else {
           stdout.writeln('Warning: git add failed.');
@@ -526,7 +619,7 @@ Future<int> _init(List<String> args) async {
     stdout.writeln('Warning: Git operation skipped due to error: $e');
   }
 
-  stdout.writeln('\nInitialization complete!');
+  stdout.writeln('\nInitialization complete for: $labels');
   return 0;
 }
 
@@ -538,7 +631,8 @@ Future<int> _runStepOrWarning(
   try {
     final exitCode = await _runStep(executable, arguments);
     if (exitCode != 0) {
-      stdout.writeln('Warning: `$executable ${arguments.join(' ')}` exited with code $exitCode.');
+      stdout.writeln(
+          'Warning: `$executable ${arguments.join(' ')}` exited with code $exitCode.');
     }
     return exitCode;
   } catch (e) {

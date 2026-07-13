@@ -22,7 +22,7 @@ Commands:
   signapk                Generate android/app keystore.jks and properties.
   sha                    Show SHA1 and SHA256 for an existing Android keystore.
   swagger                Generate Dart API response models from Swagger/OpenAPI JSON.
-  init                   Initialize Cursor, Caveman, and Graphify in the project.
+  init                   Initialize Graphify + Caveman for Cursor, Claude Code, Codex, and Antigravity.
   upgrade                Upgrade fdev to the latest version from pub.dev.
   version                Print the current version of fdev.
 
@@ -44,6 +44,7 @@ Examples:
   fdev swagger --url https://example.com/swagger.json --out lib/models/api_models.dart
   fdev swagger --file swagger.json --watch
   fdev init
+  fdev init --agents cursor,codex
   fdev upgrade
   fdev version
 
@@ -328,13 +329,26 @@ Examples:
 void _printInitHelp() {
   stdout.writeln(r'''
 Usage:
-  fdev init
+  fdev init [--agents <list>]
 
-Initializes Cursor, Caveman, and Graphify in the current project:
-1. Installs Graphify for Cursor.
-2. Generates the project graph.
-3. Adds the JuliusBrussee/caveman skill for Cursor.
-4. Ignores the graphify-out/ folder in .gitignore.
-5. Commits these changes if in a Git repository.
+One-click project setup for Graphify + Caveman across AI coding agents.
+
+Default agents: cursor, claude-code, codex, antigravity
+
+Options:
+  --agents <list>   Comma-separated subset of:
+                    cursor, claude-code, codex, antigravity
+
+Steps:
+1. Installs Graphify project integration for each selected agent.
+2. Generates the project graph (`graphify .`).
+3. Adds JuliusBrussee/caveman skills for each selected agent.
+4. Ignores graphify-out/ in .gitignore.
+5. Commits setup files if inside a Git repository.
+
+Examples:
+  fdev init
+  fdev init --agents cursor,codex
+  fdev init --agents claude-code,antigravity
 ''');
 }
